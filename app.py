@@ -9,43 +9,76 @@ st.set_page_config(page_title="Satış Gücü Optimizasyonu", layout="wide")
 st.title("📍 Satış Gücü ve Ofis Yeri Atama Modeli")
 st.markdown("""
 Bu uygulama, **Anadolu Teknoloji Çözümleri A.Ş.** için optimal ofis ve personel dağılımını hesaplar.
-Veriler varsayılan olarak **ödev senaryosuna** göre yüklüdür. Dilerseniz kendi Excel dosyanızı yükleyebilirsiniz.
+Veriler varsayılan olarak **YILDIZ_UYAR_N25110141_ödev3.xlsm** dosyasındaki ödev verilerine göre ayarlanmıştır.
 """)
 
 # --- 1. VERİ GİRİŞİ (SOL PANEL) ---
 st.sidebar.header("⚙️ Parametre Ayarları")
 
 # Excel Yükleme Opsiyonu
-uploaded_file = st.sidebar.file_uploader("📂 Excel Dosyası Yükle (Opsiyonel)", type=["xlsx", "xlsm"])
+uploaded_file = st.sidebar.file_uploader("📂 Başka Excel Yükle (Opsiyonel)", type=["xlsx", "xlsm"])
 
-# Maliyetler
+# Maliyetler (Excel'den alınan varsayılanlar: 120k Maliyet, 40k Maaş, 120 Saat)
 with st.sidebar.expander("💰 Maliyet ve Kapasite", expanded=True):
-    maas = st.number_input("Personel Maaşı (TL)", value=35000, step=1000)
-    kapasite = st.number_input("Personel Kapasitesi (Saat/Ay)", value=160, step=10)
-    big_m = 100  # Büyük M sayısı
+    # Sabit Maliyet Excel'de tek bir hücrede (N1) tanımlıydı: 120.000 TL
+    sabit_maliyet_varsayilan = st.number_input("Sabit Ofis Maliyeti (TL)", value=120000, step=1000)
+    # Personel Maaşı Excel'de (N2): 40.000 TL
+    maas = st.number_input("Personel Maaşı (TL)", value=40000, step=1000)
+    # Kapasite Excel'de: 120 Saat
+    kapasite = st.number_input("Personel Kapasitesi (Saat/Ay)", value=120, step=10)
+    big_m = 1000  # Büyük M sayısı
 
-# --- VARSAYILAN VERİLERİN HAZIRLANMASI ---
-# Eğer kullanıcı Excel yüklemediyse, senin ödevindeki verileri kullanıyoruz.
+# --- VARSAYILAN VERİLER (EXCEL'DEN ÇEKİLENLER) ---
 if uploaded_file is None:
+    # Excel'den çıkarılan gerçek ilçe ve talep listesi
+    ilceler_listesi = [
+        "Kadışehri", "Sorgun", "Çayıralan", "Boğazlıyan", "Şefaatli", 
+        "Çiçekdağı", "Kaman", "Mucur", "Sarıyahşi", "Ortaköy", 
+        "Güzelyurt", "Eskil"
+    ]
+    # Excel'den okunan 'Müşteri Sayısı' (Talep)
+    talepler_listesi = [150, 200, 150, 180, 120, 150, 360, 230, 180, 310, 240, 170]
+    
+    # Excel'deki 12x12 Hizmet Süresi Matrisi
+    matrix_values = [
+        [1, 3, 5, 6, 8, 10, 13, 14, 16, 17, 20, 23],
+        [3, 1, 3, 5, 7, 8, 9, 11, 14, 16, 19, 21],
+        [5, 3, 1, 2, 5, 8, 10, 12, 13, 15, 16, 17],
+        [6, 5, 2, 1, 2, 5, 7, 9, 11, 12, 14, 16],
+        [8, 7, 5, 2, 1, 3, 5, 8, 9, 11, 13, 14],
+        [10, 8, 8, 5, 3, 1, 4, 6, 7, 10, 11, 13],
+        [13, 9, 10, 7, 5, 4, 1, 3, 5, 8, 9, 11],
+        [14, 11, 12, 9, 8, 6, 3, 1, 4, 6, 8, 10],
+        [16, 14, 13, 11, 9, 7, 5, 4, 1, 3, 5, 8],
+        [17, 16, 15, 12, 11, 10, 8, 6, 3, 1, 4, 7],
+        [20, 19, 16, 14, 13, 11, 9, 8, 5, 4, 1, 5],
+        [23, 21, 17, 16, 14, 13, 11, 9, 8, 7, 5, 1]
+    ]
+
     varsayilan_veri = {
-        'İlçe': [
-            "Kadışehri", "Sorgun", "Çayıralan", "Boğazlıyan", "Şefaatli", 
-            "Çiçekdağı", "Kaman", "Mucur", "Sarıyahşi", "Ortaköy", 
-            "Güzelyurt", "Eskil"
-        ],
-        'Talep (Müşteri)': [45, 120, 40, 90, 50, 45, 80, 60, 30, 95, 35, 70],
-        'Ofis Maliyeti (TL)': [18000, 30000, 17000, 25000, 19000, 18000, 22000, 20000, 15000, 26000, 16000, 21000]
+        'İlçe': ilceler_listesi,
+        'Talep (Müşteri)': talepler_listesi,
+        # Excel'de ofis maliyeti her ilçe için standart (120.000 TL) görünüyor
+        'Ofis Maliyeti (TL)': [sabit_maliyet_varsayilan] * 12
     }
     df = pd.DataFrame(varsayilan_veri)
+    df_distance = pd.DataFrame(matrix_values, columns=ilceler_listesi, index=ilceler_listesi)
+
 else:
+    # Kullanıcı yeni dosya yüklerse
     try:
-        # Excel yüklenirse okumaya çalış
         df = pd.read_excel(uploaded_file)
-        # Sütun isimlerini standartlaştıralım (Hata önleyici)
+        # Format uydurma (En az 3 sütun varsayımı)
         if len(df.columns) >= 3:
             df.columns = ['İlçe', 'Talep (Müşteri)', 'Ofis Maliyeti (TL)'] + list(df.columns[3:])
+            ilceler_listesi = df['İlçe'].astype(str).tolist()
+            # Matris için basit bir varsayım (Yüklenen dosyadan matris okumak karmaşıktır, burada rastgele oluşturuyoruz)
+            # Gerçek bir uygulamada matrisin de okunması gerekir.
+            df_distance = pd.DataFrame(np.random.randint(2, 10, size=(len(df), len(df))), 
+                                     columns=ilceler_listesi, index=ilceler_listesi)
+            np.fill_diagonal(df_distance.values, 1)
         else:
-            st.error("Excel formatı uygun değil. En az 3 sütun olmalı: İlçe, Talep, Maliyet")
+            st.error("Excel formatı uygun değil.")
             st.stop()
     except Exception as e:
         st.error(f"Dosya okunamadı: {e}")
@@ -55,22 +88,14 @@ else:
 st.subheader("📋 İlçe Verileri (Düzenlenebilir)")
 edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
 
-# İlçeleri ve Parametreleri Listeye Çevir
+# Listeleri Güncelle
 ilceler = edited_df['İlçe'].astype(str).tolist()
 talepler = dict(zip(edited_df['İlçe'], edited_df['Talep (Müşteri)']))
 ofis_maliyetleri = dict(zip(edited_df['İlçe'], edited_df['Ofis Maliyeti (TL)']))
 
-# --- MESAFE MATRİSİ (SİMÜLASYON) ---
-# Gerçek Excel'deki karmaşık matrisi okumak zor olacağı için,
-# burada mantıklı bir uzaklık matrisi oluşturuyoruz.
-# (Kendi ilçesi 2 saat, diğerleri 4-9 saat arası rastgele ama sabit)
-
+# --- MESAFE MATRİSİ ---
 st.subheader("🚗 Hizmet Süreleri Matrisi (Saat)")
-np.random.seed(42) # Her seferinde aynı sayıları üretmek için
-distance_data = np.random.randint(4, 10, size=(len(ilceler), len(ilceler)))
-np.fill_diagonal(distance_data, 2) # Kendi ilçesine hizmet 2 saat
-
-df_distance = pd.DataFrame(distance_data, columns=ilceler, index=ilceler)
+# Matrisi de düzenlenebilir yapıyoruz
 edited_matrix = st.data_editor(df_distance, use_container_width=True)
 
 
@@ -96,17 +121,16 @@ if solve_btn:
 
             # 2. KISITLAR
             
-            # A) Talep Karşılama: Her ilçenin talebi, bir yerlerden karşılanmalı
+            # A) Talep Karşılama
             for j in ilceler:
                 prob += pulp.lpSum([x[i][j] for i in ilceler]) == talepler[j]
 
-            # B) Kapasite (Zaman) Kısıtı: Personel süresi yetmeli
+            # B) Kapasite (Zaman) Kısıtı
             for i in ilceler:
-                # i ofisinden yapılan toplam iş saati (tüm j'ler için: atanan müşteri * süre)
                 harcanan_sure = pulp.lpSum([x[i][j] * edited_matrix.loc[i, j] for j in ilceler])
                 prob += harcanan_sure <= p[i] * kapasite
 
-            # C) Bağlantı Kısıtı: Ofis açılmadıysa personel olamaz
+            # C) Bağlantı Kısıtı
             for i in ilceler:
                 prob += p[i] <= big_m * y[i]
 
@@ -119,7 +143,6 @@ if solve_btn:
                 toplam_maliyet = pulp.value(prob.objective)
                 st.success(f"✅ Çözüm Bulundu! Toplam Maliyet: **{toplam_maliyet:,.2f} TL**")
 
-                # Sonuç Tablosu Hazırlığı
                 sonuc_data = []
                 toplam_pers = 0
                 acilan_ofis = 0
@@ -131,7 +154,6 @@ if solve_btn:
                         toplam_pers += per_say
                         acilan_ofis += 1
                         
-                        # Hangi ilçelere hizmet veriyor?
                         hizmet_listesi = []
                         for j in ilceler:
                             val = x[i][j].varValue
@@ -154,12 +176,10 @@ if solve_btn:
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Açılan Ofis Sayısı", int(acilan_ofis))
                 m2.metric("Toplam Personel", int(toplam_pers))
-                m3.metric("Müşteri Başı Maliyet", f"{toplam_maliyet / sum(talepler.values()):,.0f} TL")
+                if sum(talepler.values()) > 0:
+                     m3.metric("Müşteri Başı Maliyet", f"{toplam_maliyet / sum(talepler.values()):,.0f} TL")
 
                 st.dataframe(pd.DataFrame(sonuc_data), use_container_width=True)
 
             else:
                 st.error("Çözüm Bulunamadı! (Infeasible). Lütfen personel kapasitesini artırın.")
-        
-        except Exception as e:
-            st.error(f"Bir hata oluştu: {e}")
