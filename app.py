@@ -23,7 +23,7 @@ with st.sidebar.expander("💰 Maliyet ve Kapasite", expanded=True):
     sabit_maliyet_varsayilan = st.number_input("Sabit Ofis Maliyeti (TL)", value=120000, step=1000)
     maas = st.number_input("Personel Maaşı (TL)", value=40000, step=1000)
     kapasite = st.number_input("Personel Kapasitesi (Saat/Ay)", value=120, step=10)
-    # Excel'de bu değer 8 olarak görünüyor. Bu çok kritik bir kısıt!
+    # Excel'de bu değer 8 olarak görünüyor.
     big_m = st.number_input("Maksimum Personel (Big M)", value=8, step=1, help="Bir ofiste çalışabilecek maksimum kişi sayısı.")
 
 # --- VARSAYILAN VERİLERİN OLUŞTURULMASI ---
@@ -35,7 +35,7 @@ if uploaded_file is None:
         "Güzelyurt", "Eskil"
     ]
     
-    # 2. Talepler (Excel'den: 150, 200... şeklinde giden liste)
+    # 2. Talepler (Excel'den)
     talepler_listesi = [150, 200, 150, 180, 120, 150, 360, 230, 180, 310, 240, 170]
     
     # 3. Hizmet Süreleri Matrisi (12x12 - Excel'deki tablonun aynısı)
@@ -122,4 +122,72 @@ if solve_btn:
 
             # Kısıtlar
             for j in ilceler:
-                # Talep
+                # Talep Karşılama: Tüm ilçelerin talebi karşılanmalı
+                prob += pulp.lpSum([x[i][j] for i in ilceler]) == talepler[j]
+
+            for i in ilceler:
+                # Kapasite Kısıtı
+                harcanan_sure = pulp.lpSum([x[i][j] * edited_matrix.loc[i, j] for j in ilceler])
+                prob += harcanan_sure <= p[i] * kapasite
+                
+                # Bağlantı (Ofis-Personel) ve Big M Kısıtı
+                prob += p[i] <= big_m * y[i]
+
+            # Çöz
+            prob.solve()
+            status = pulp.LpStatus[prob.status]
+
+            # --- SONUÇLAR ---
+            if status == "Optimal":
+                toplam_maliyet = pulp.value(prob.objective)
+                st.success(f"✅ Çözüm Bulundu! Toplam Maliyet: **{toplam_maliyet:,.2f} TL**")
+
+                sonuc_data = []
+                toplam_pers = 0
+                acilan_ofis = 0
+
+                for i in ilceler:
+                    if y[i].varValue == 1:
+                        durum = "✅ AÇIK"
+                        per_say = p[i].varValue
+                        toplam_pers += per_say
+                        acilan_ofis += 1
+                        
+                        hizmet_listesi = []
+                        for j in ilceler:
+                            val = x[i][j].varValue
+                            if val > 0:
+                                hizmet_listesi.append(f"{j} ({int(val)})")
+                        hizmet_str = ", ".join(hizmet_listesi)
+                    else:
+                        durum = "❌ KAPALI"
+                        per_say = 0
+                        hizmet_str = "-"
+                    
+                    sonuc_data.append({
+                        "İlçe": i,
+                        "Ofis Durumu": durum,
+                        "Personel Sayısı": int(per_say),
+                        "Hizmet Verilen Bölgeler": hizmet_str
+                    })
+
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Açılan Ofis Sayısı", int(acilan_ofis))
+                m2.metric("Toplam Personel", int(toplam_pers))
+                if sum(talepler.values()) > 0:
+                     m3.metric(
+                         "Müşteri Başı Maliyet", 
+                         f"{toplam_maliyet / sum(talepler.values()):,.0f} TL"
+                     )
+
+                # Sonuç Tablosu
+                st.dataframe(
+                    pd.DataFrame(sonuc_data), 
+                    use_container_width=True
+                )
+
+            else:
+                st.error("Çözüm Bulunamadı! (Infeasible). Personel kapasitesi veya 'Maksimum Personel' sınırı çok düşük.")
+        
+        except Exception as e:
+            st.error(f"Bir hata oluştu: {e}")
