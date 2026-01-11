@@ -9,7 +9,6 @@ st.set_page_config(page_title="Satış Gücü Optimizasyonu", layout="wide")
 st.title("📍 Satış Gücü ve Ofis Yeri Atama Modeli")
 st.markdown("""
 Bu uygulama, **Anadolu Teknoloji Çözümleri A.Ş.** için optimal ofis ve personel dağılımını hesaplar.
-**Not:** Veriler ve kısıtlar (özellikle Personel Sınırı = 8) yüklediğiniz Excel dosyasıyla birebir eşlenmiştir.
 """)
 
 # --- 1. VERİ GİRİŞİ (SOL PANEL) ---
