@@ -60,7 +60,11 @@ if uploaded_file is None:
         'Ofis Maliyeti (TL)': [sabit_maliyet_varsayilan] * 12
     }
     df = pd.DataFrame(varsayilan_veri)
-    df_distance = pd.DataFrame(matrix_values, columns=ilceler_listesi, index=ilceler_listesi)
+    df_distance = pd.DataFrame(
+        matrix_values, 
+        columns=ilceler_listesi, 
+        index=ilceler_listesi
+    )
 
 else:
     # Kullanıcı dosya yüklerse çalışacak kısım
@@ -70,9 +74,12 @@ else:
         if len(df.columns) >= 3:
             df.columns = ['İlçe', 'Talep (Müşteri)', 'Ofis Maliyeti (TL)'] + list(df.columns[3:])
             ilceler_listesi = df['İlçe'].astype(str).tolist()
-            # Yüklenen dosyada matris yoksa rastgele oluştur (Hata vermemesi için)
-            df_distance = pd.DataFrame(np.random.randint(2, 10, size=(len(df), len(df))), 
-                                     columns=ilceler_listesi, index=ilceler_listesi)
+            # Yüklenen dosyada matris yoksa rastgele oluştur
+            df_distance = pd.DataFrame(
+                np.random.randint(2, 10, size=(len(df), len(df))), 
+                columns=ilceler_listesi, 
+                index=ilceler_listesi
+            )
             np.fill_diagonal(df_distance.values, 1)
         else:
             st.error("Excel formatı uygun değil. En az 3 sütun olmalı.")
@@ -166,6 +173,19 @@ if solve_btn:
                 m1.metric("Açılan Ofis Sayısı", int(acilan_ofis))
                 m2.metric("Toplam Personel", int(toplam_pers))
                 if sum(talepler.values()) > 0:
-                     m3.metric("Müşteri Başı Maliyet", f"{toplam_maliyet / sum(talepler.values()):,.0f} TL")
+                     m3.metric(
+                         "Müşteri Başı Maliyet", 
+                         f"{toplam_maliyet / sum(talepler.values()):,.0f} TL"
+                     )
 
-                st.dataframe(pd.DataFrame(sonuc_data), use_container
+                # Düzeltilmiş Satır (Parantez Hatasını Önlemek İçin Bölünmüş)
+                st.dataframe(
+                    pd.DataFrame(sonuc_data), 
+                    use_container_width=True
+                )
+
+            else:
+                st.error("Çözüm Bulunamadı! (Infeasible). Lütfen personel kapasitesini artırın.")
+        
+        except Exception as e:
+            st.error(f"Bir hata oluştu: {e}")
