@@ -61,8 +61,4 @@ if uploaded_file is None:
         'Ofis Maliyeti (TL)': [sabit_maliyet_varsayilan] * 12
     }
     df = pd.DataFrame(varsayilan_veri)
-    df_distance = pd.DataFrame(matrix_values, columns=ilceler_listesi, index=ilceler_listesi)
-
-else:
-    # Kullanıcı yeni dosya yüklerse
-    try:
+    df_distance = pd.DataFrame(matrix_values,
